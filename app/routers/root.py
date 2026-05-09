@@ -1,8 +1,1 @@
-from fastapi import APIRouter
-
-router = APIRouter()
-
-
-@router.get("/")
-def read_root() -> dict[str, str]:
-    return {"message": "Taxi dispatch prototypeee"}
+from modules.root.router import router as router  # noqa: F401

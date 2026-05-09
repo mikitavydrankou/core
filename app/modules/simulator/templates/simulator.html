@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Driver Simulator</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #07111f;
+        --panel: rgba(16, 26, 45, 0.92);
+        --border: rgba(148, 163, 184, 0.18);
+        --text: #e7eefc;
+        --muted: #94a3b8;
+        --accent: #63e6be;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: linear-gradient(180deg, #07111f 0%, #0b1424 100%);
+        color: var(--text);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 340px 1fr;
+        min-height: 100vh;
+      }
+
+      aside {
+        background: var(--panel);
+        border-right: 1px solid var(--border);
+        padding: 20px;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+      }
+
+      p {
+        margin: 0 0 16px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .buttons {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 16px;
+      }
+
+      button {
+        border: 0;
+        border-radius: 12px;
+        padding: 10px 14px;
+        cursor: pointer;
+        background: linear-gradient(135deg, var(--accent), #8cf2e6);
+        color: #06131b;
+        font-weight: 700;
+      }
+
+      button.secondary {
+        background: transparent;
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+
+      .status {
+        margin-bottom: 16px;
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .drivers {
+        display: grid;
+        gap: 10px;
+      }
+
+      .driver-card {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.03);
+        padding: 12px;
+      }
+
+      .driver-name {
+        font-weight: 700;
+        margin-bottom: 4px;
+      }
+
+      .driver-meta {
+        font-size: 13px;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+
+      #map {
+        width: 100%;
+        height: 100vh;
+      }
+
+      @media (max-width: 900px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+
+        aside {
+          border-right: 0;
+          border-bottom: 1px solid var(--border);
+        }
+
+        #map {
+          height: 70vh;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <aside>
+        <h1>Driver Simulator</h1>
+        <p>Симулирует несколько водителей, которые двигаются по карте и отправляют координаты на backend по WebSocket.</p>
+        <div class="buttons">
+          <button id="startBtn">Start</button>
+          <button class="secondary" id="stopBtn">Stop</button>
+          <button class="secondary" id="resetBtn">Reset</button>
+        </div>
+        <div class="status" id="status">Disconnected</div>
+        <div class="drivers" id="driverList"></div>
+      </aside>
+      <main id="map"></main>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+      const statusEl = document.getElementById("status");
+      const driverList = document.getElementById("driverList");
+      const startBtn = document.getElementById("startBtn");
+      const stopBtn = document.getElementById("stopBtn");
+      const resetBtn = document.getElementById("resetBtn");
+      const map = L.map("map").setView([53.9, 27.56], 11);
+      const driverCount = 4;
+      const drivers = [];
+      const markers = new Map();
+      let socket = null;
+      let timers = new Map();
+      let sequence = 0;
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      }).addTo(map);
+
+      function randomOffset() {
+        return (Math.random() - 0.5) * 0.01;
+      }
+
+      function nextDelayMs() {
+        return 2000 + Math.floor(Math.random() * 3000);
+      }
+
+      function driverIcon(color) {
+        return L.divIcon({
+          className: "",
+          html: `<div style="width:16px;height:16px;border-radius:50%;background:${color};border:3px solid white;box-shadow:0 0 0 4px rgba(0,0,0,0.18);"></div>`,
+          iconSize: [22, 22],
+          iconAnchor: [11, 11],
+        });
+      }
+
+      function colorByIndex(index) {
+        const colors = ["#63e6be", "#7aa2ff", "#ff8a65", "#f06292"];
+        return colors[index % colors.length];
+      }
+
+      function setStatus(text) {
+        statusEl.textContent = text;
+      }
+
+      function initDrivers() {
+        drivers.length = 0;
+        for (let index = 0; index < driverCount; index += 1) {
+          const driver = {
+            driverId: String(index + 1),
+            lat: 53.9 + randomOffset(),
+            lng: 27.56 + randomOffset(),
+            status: "online",
+            color: colorByIndex(index),
+          };
+          drivers.push(driver);
+
+          const marker = L.marker([driver.lat, driver.lng], { icon: driverIcon(driver.color) })
+            .addTo(map)
+            .bindPopup(`Driver ${driver.driverId}`);
+          markers.set(driver.driverId, marker);
+        }
+        renderDriverList();
+      }
+
+      function renderDriverList() {
+        driverList.innerHTML = drivers
+          .map(
+            (driver) => `
+              <div class="driver-card">
+                <div class="driver-name">Driver ${driver.driverId}</div>
+                <div class="driver-meta">Lat: ${driver.lat.toFixed(5)}<br/>Lng: ${driver.lng.toFixed(5)}<br/>Status: ${driver.status}</div>
+              </div>
+            `
+          )
+          .join("");
+      }
+
+      function connect() {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          return;
+        }
+
+        socket = new WebSocket("ws://127.0.0.1:8000/ws");
+        socket.addEventListener("open", () => setStatus("Connected"));
+        socket.addEventListener("close", () => setStatus("Disconnected"));
+        socket.addEventListener("error", () => setStatus("WebSocket error"));
+        socket.addEventListener("message", (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === "driver_ack") {
+              return;
+            }
+          } catch (error) {
+            return;
+          }
+        });
+      }
+
+      function sendDriverPosition(driver) {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          return;
+        }
+
+        sequence += 1;
+        const payload = {
+          type: "driver_location",
+          driverId: driver.driverId,
+          lat: driver.lat,
+          lng: driver.lng,
+          status: driver.status,
+          seq: sequence,
+          ts: new Date().toISOString(),
+        };
+
+        socket.send(JSON.stringify(payload));
+      }
+
+      function moveDriver(driver) {
+        driver.lat += (Math.random() - 0.5) * 0.002;
+        driver.lng += (Math.random() - 0.5) * 0.002;
+        driver.status = Math.random() > 0.85 ? "busy" : "online";
+
+        const marker = markers.get(driver.driverId);
+        if (marker) {
+          marker.setLatLng([driver.lat, driver.lng]);
+          marker.setIcon(driverIcon(driver.color));
+        }
+
+        renderDriverList();
+        sendDriverPosition(driver);
+      }
+
+      function start() {
+        connect();
+
+        drivers.forEach((driver) => {
+          if (timers.has(driver.driverId)) {
+            clearTimeout(timers.get(driver.driverId));
+          }
+
+          const tick = () => {
+            moveDriver(driver);
+            const timeout = setTimeout(tick, nextDelayMs());
+            timers.set(driver.driverId, timeout);
+          };
+
+          const timeout = setTimeout(tick, 500);
+          timers.set(driver.driverId, timeout);
+        });
+      }
+
+      function stop() {
+        timers.forEach((timeout) => clearTimeout(timeout));
+        timers.clear();
+      }
+
+      function reset() {
+        stop();
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.close(1000, "reset");
+        }
+        for (const marker of markers.values()) {
+          map.removeLayer(marker);
+        }
+        markers.clear();
+        initDrivers();
+        setStatus("Disconnected");
+      }
+
+      startBtn.addEventListener("click", start);
+      stopBtn.addEventListener("click", stop);
+      resetBtn.addEventListener("click", reset);
+
+      initDrivers();
+      setStatus("Disconnected");
+    </script>
+  </body>
+</html>
