@@ -1,5 +1,36 @@
 # core
 
+## Quick start (новый разработчик)
+
+1. Клонировать репозиторий и перейти в каталог проекта.
+2. Создать и активировать виртуальное окружение Python 3.12.
+3. Установить зависимости и локальные git-хуки.
+4. Поднять инфраструктуру (Postgres и Redis).
+5. Запустить backend локально.
+6. Прогнать quality gate.
+
+```bash
+git clone <repo-url>
+cd core
+
+python3 -m venv .venv
+. .venv/bin/activate
+
+make install-dev
+make precommit-install
+
+docker compose up -d db redis
+
+cd app
+uvicorn main:app --reload
+```
+
+В отдельном терминале из корня проекта:
+
+```bash
+make check
+```
+
 ## Архитектура и правила
 
 Структура приложения и правила развития описаны в [app/README.md](app/README.md).
@@ -50,7 +81,7 @@ make precommit-install
 
 ### CI
 
-В репозитории добавлен workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml), который запускает `make check` на каждый push и pull request.
+GitHub Actions временно отключен для этого репозитория. Все проверки выполняются локально через pre-push и `make check`.
 
 Если backend запущен через Docker, пересоберите контейнер после изменений:
 
