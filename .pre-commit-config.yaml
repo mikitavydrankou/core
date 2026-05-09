@@ -13,3 +13,12 @@ repos:
       - id: ruff
         args: [--fix]
       - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: full-quality-gate
+        name: full-quality-gate (make check)
+        entry: make check
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

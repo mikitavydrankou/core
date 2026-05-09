@@ -1,4 +1,4 @@
-PYTHON ?= .venv/bin/python
+PYTHON ?= $(shell if [ -x .venv/bin/python ]; then echo .venv/bin/python; elif command -v python3 >/dev/null 2>&1; then echo python3; else echo python; fi)
 PIP ?= $(PYTHON) -m pip
 
 .PHONY: install-dev lint format test check precommit-install
@@ -19,3 +19,4 @@ check: lint test
 
 precommit-install:
 	$(PYTHON) -m pre_commit install
+	$(PYTHON) -m pre_commit install --hook-type pre-push

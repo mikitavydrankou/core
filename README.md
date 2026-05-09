@@ -43,6 +43,11 @@ make install-dev
 make precommit-install
 ```
 
+После установки хуков действует и `pre-push` проверка:
+
+- перед `git push` автоматически запускается `make check`
+- если линт или тесты падают, push блокируется
+
 ### CI
 
 В репозитории добавлен workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml), который запускает `make check` на каждый push и pull request.
