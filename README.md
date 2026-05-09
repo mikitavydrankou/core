@@ -19,16 +19,27 @@ python3 -m venv .venv
 make install-dev
 make precommit-install
 
-docker compose up -d db redis
-
-cd app
-uvicorn main:app --reload
+make dev-start
 ```
 
 В отдельном терминале из корня проекта:
 
 ```bash
 make check
+```
+
+## Dev flow без Docker-overhead
+
+Для daily development backend запускается локально, а в Docker остаются только Postgres и Redis.
+
+Быстрые команды:
+
+```bash
+make infra-up     # поднять db + redis
+make run-api      # запустить FastAPI локально с --reload
+make infra-down   # остановить db + redis
+make dev-start    # поднять infra и запустить API локально
+make dev-stop     # остановить infra
 ```
 
 ## Архитектура и правила
@@ -83,8 +94,8 @@ make precommit-install
 
 GitHub Actions временно отключен для этого репозитория. Все проверки выполняются локально через pre-push и `make check`.
 
-Если backend запущен через Docker, пересоберите контейнер после изменений:
+Если нужно поднять только инфраструктуру вручную:
 
 ```bash
-docker compose up -d --build
+docker compose up -d db redis
 ```
