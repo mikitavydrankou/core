@@ -55,6 +55,12 @@ make dev-stop     # остановить infra
 - [http://127.0.0.1:8000/sim](http://127.0.0.1:8000/sim) - multi-driver simulator that moves several fake drivers and sends their coordinates.
 - [http://127.0.0.1:8000/dispatch](http://127.0.0.1:8000/dispatch) - dispatcher map with live driver markers.
 
+## Telegram mini app flow
+
+- core теперь отвечает только за API и WebSocket.
+- Telegram mini app живет в отдельном репозитории `tgwebapp` и подключается к этому backend по WebSocket `/ws`.
+- Координаты, отправленные из mini app, сразу видны на странице диспетчера `/dispatch`.
+
 ## Quality gate
 
 Перед каждым merge прогоняйте единый чек:

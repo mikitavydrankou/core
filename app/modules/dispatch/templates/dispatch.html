@@ -125,7 +125,7 @@
     <div class="layout">
       <aside>
         <h1>Dispatcher</h1>
-        <p>Карта показывает последних известных водителей. Данные берутся из памяти backend и обновляются раз в секунду.</p>
+        <p>Карта показывает последние координаты из backend (симулятор и Telegram mini app). Данные обновляются раз в секунду.</p>
         <div class="status" id="status">Loading drivers...</div>
         <div class="driver-list" id="driverList"></div>
       </aside>
@@ -168,8 +168,8 @@
 
       function renderDrivers(drivers) {
         if (!drivers.length) {
-          driverList.innerHTML = '<div class="empty">Пока нет водителей. Запусти симулятор.</div>';
-          statusEl.textContent = "No drivers online";
+          driverList.innerHTML = '<div class="empty">Пока нет координат. Запусти симулятор или Telegram mini app.</div>';
+          statusEl.textContent = "No live locations";
           return;
         }
 
