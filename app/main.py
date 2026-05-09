@@ -1,17 +1,11 @@
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI
+
+from routers.monitor import router as monitor_router
+from routers.root import router as root_router
+from routers.websocket import router as websocket_router
 
 app = FastAPI()
 
-# простой REST
-@app.get("/")
-def read_root():
-    return {"message": "Taxi dispatch prototypeee"}
-
-# WebSocket для real-time координат
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    while True:
-        data = await websocket.receive_text()
-        print(f"Received: {data}")
-        await websocket.send_text(f"Echo: {data}")
+app.include_router(root_router)
+app.include_router(monitor_router)
+app.include_router(websocket_router)

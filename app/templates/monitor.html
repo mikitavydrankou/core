@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WebSocket Monitor</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #07111f;
+        --panel: #101a2d;
+        --panel-2: #16233a;
+        --text: #e7eefc;
+        --muted: #94a3b8;
+        --accent: #63e6be;
+        --border: rgba(148, 163, 184, 0.2);
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at top left, rgba(99, 230, 190, 0.16), transparent 28%),
+          radial-gradient(circle at top right, rgba(122, 162, 255, 0.18), transparent 25%),
+          linear-gradient(180deg, #07111f 0%, #0b1424 100%);
+        color: var(--text);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+        padding: 24px;
+      }
+
+      .card {
+        max-width: 1100px;
+        margin: 0 auto;
+        background: rgba(16, 26, 45, 0.9);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        overflow: hidden;
+        box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
+      }
+
+      header {
+        padding: 22px 24px;
+        border-bottom: 1px solid var(--border);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent);
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: clamp(24px, 3vw, 34px);
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      main {
+        padding: 24px;
+        display: grid;
+        gap: 16px;
+      }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .status {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      button {
+        border: 0;
+        border-radius: 12px;
+        padding: 10px 14px;
+        cursor: pointer;
+        background: linear-gradient(135deg, var(--accent), #86f0cf);
+        color: #062016;
+        font-weight: 700;
+      }
+
+      .log {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        overflow: auto;
+        min-height: 420px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      thead th {
+        position: sticky;
+        top: 0;
+        background: var(--panel-2);
+        text-align: left;
+        font-size: 13px;
+        color: var(--muted);
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      tbody td {
+        padding: 12px 16px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+        vertical-align: top;
+        word-break: break-word;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 13px;
+      }
+
+      tbody tr:hover {
+        background: rgba(255, 255, 255, 0.03);
+      }
+
+      .time {
+        white-space: nowrap;
+      }
+
+      .empty {
+        color: var(--muted);
+        padding: 18px 16px;
+      }
+
+      .source {
+        display: inline-flex;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: rgba(99, 230, 190, 0.12);
+        color: #92f2d0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <header>
+        <h1>WebSocket Monitor</h1>
+        <p>Здесь отображаются все сообщения, которые приходят на backend через WebSocket.</p>
+      </header>
+      <main>
+        <div class="toolbar">
+          <div class="status" id="status">Loading...</div>
+          <button id="refreshBtn">Refresh now</button>
+        </div>
+        <div class="log">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 220px;">Time</th>
+                <th style="width: 180px;">Source</th>
+                <th>Data</th>
+              </tr>
+            </thead>
+            <tbody id="rows">
+              <tr><td class="empty" colspan="3">Waiting for messages...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      const rows = document.getElementById("rows");
+      const status = document.getElementById("status");
+      const refreshBtn = document.getElementById("refreshBtn");
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      async function loadMessages() {
+        try {
+          const response = await fetch("/api/messages");
+          const data = await response.json();
+
+          status.textContent = `Loaded ${data.length} message(s). Auto-refresh every 1s.`;
+
+          if (!data.length) {
+            rows.innerHTML = '<tr><td class="empty" colspan="3">Waiting for messages...</td></tr>';
+            return;
+          }
+
+          rows.innerHTML = data
+            .slice()
+            .reverse()
+            .map((item) => `
+              <tr>
+                <td class="time">${escapeHtml(item.time)}</td>
+                <td><span class="source">${escapeHtml(item.source)}</span></td>
+                <td>${escapeHtml(item.data)}</td>
+              </tr>
+            `)
+            .join("");
+        } catch (error) {
+          status.textContent = `Failed to load messages: ${error.message}`;
+        }
+      }
+
+      refreshBtn.addEventListener("click", loadMessages);
+      loadMessages();
+      setInterval(loadMessages, 1000);
+    </script>
+  </body>
+</html>
