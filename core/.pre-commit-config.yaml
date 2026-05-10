@@ -18,7 +18,7 @@ repos:
     hooks:
       - id: full-quality-gate
         name: full-quality-gate (make check)
-        entry: make check
+        entry: make -C core check
         language: system
         pass_filenames: false
         stages: [pre-push]
