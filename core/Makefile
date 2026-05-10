@@ -1,4 +1,5 @@
 ROOT_DIR := $(CURDIR)
+GIT_ROOT := $(shell git rev-parse --show-toplevel)
 PYTHON ?= $(shell if [ -x "$(ROOT_DIR)/.venv/bin/python" ]; then echo "$(ROOT_DIR)/.venv/bin/python"; elif command -v python3 >/dev/null 2>&1; then echo python3; else echo python; fi)
 PIP ?= $(PYTHON) -m pip
 
@@ -20,8 +21,8 @@ test:
 check: lint test
 
 precommit-install:
-	$(PYTHON) -m pre_commit install
-	$(PYTHON) -m pre_commit install --hook-type pre-push
+	cd $(GIT_ROOT) && $(PYTHON) -m pre_commit install --config core/.pre-commit-config.yaml
+	cd $(GIT_ROOT) && $(PYTHON) -m pre_commit install --hook-type pre-push --config core/.pre-commit-config.yaml
 
 infra-up:
 	docker compose up -d db redis

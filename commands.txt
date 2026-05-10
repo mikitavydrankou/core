@@ -1,0 +1,5 @@
+Зайти на сервак:
+ssh -i ~/.ssh/mctaxi_vm_key nikita@34.107.50.184
+
+Подчистить старые known_hosts
+ssh-keygen -f ~/.ssh/known_hosts -R 34.107.50.184
