@@ -76,6 +76,12 @@ variable "backend_repo_ssh_private_key" {
   sensitive   = true
 }
 
+variable "backend_repo_use_ssh_key" {
+  description = "Set to true if you will provision an SSH private key on the VM at backend_repo_ssh_key_path (not recommended to put key in TF vars)."
+  type        = bool
+  default     = false
+}
+
 variable "backend_repo_ssh_key_path" {
   description = "Path where the SSH private key should be written on the VM"
   type        = string
@@ -86,4 +92,23 @@ variable "backend_repo_branch" {
   description = "Git branch to deploy for the core backend"
   type        = string
   default     = "main"
+}
+
+variable "duckdns_subdomain" {
+  description = "DuckDNS subdomain (without .duckdns.org). Leave empty to disable DuckDNS setup."
+  type        = string
+  default     = ""
+}
+
+variable "duckdns_token" {
+  description = "DuckDNS token for updating dynamic DNS. Leave empty to disable DuckDNS setup."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "letsencrypt_email" {
+  description = "Email for Let's Encrypt registration (used by Traefik)."
+  type        = string
+  default     = ""
 }

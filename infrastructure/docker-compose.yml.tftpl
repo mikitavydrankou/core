@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v2.11.8
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.le.acme.httpchallenge=true
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.le.acme.email=${letsencrypt_email}
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${app_root}/acme.json:/letsencrypt/acme.json
+
+  mctaxi-core:
+    build:
+      context: ${app_dir}/app
+      dockerfile: Dockerfile
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mctaxi.rule=Host(`${duckdns_subdomain}.duckdns.org`) && PathPrefix(`/`)"
+      - "traefik.http.routers.mctaxi.entrypoints=websecure"
+      - "traefik.http.routers.mctaxi.tls.certresolver=le"
+      - "traefik.http.routers.mctaxi.priority=1"
+      - "traefik.http.services.mctaxi.loadbalancer.server.port=${app_port}"
+
+  tgweb-static:
+    image: nginx:stable-alpine
+    volumes:
+      - ${app_root}/tgwebapp:/usr/share/nginx/html:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.tgweb.rule=Host(`${duckdns_subdomain}.duckdns.org`) && PathPrefix(`/app`)"
+      - "traefik.http.routers.tgweb.entrypoints=websecure"
+      - "traefik.http.routers.tgweb.tls.certresolver=le"
+      - "traefik.http.routers.tgweb.priority=100"
+      - "traefik.http.routers.tgweb.middlewares=tgweb-strip@docker"
+      - "traefik.http.middlewares.tgweb-strip.stripPrefix.prefixes=/app"
+
+# no named volumes needed

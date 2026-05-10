@@ -4,13 +4,24 @@ resource "random_id" "suffix" {
 
 locals {
   base_name = "${var.name_prefix}-${random_id.suffix.hex}"
+  docker_compose = templatefile("${path.module}/docker-compose.yml.tftpl", {
+    duckdns_subdomain = var.duckdns_subdomain
+    letsencrypt_email = var.letsencrypt_email
+    app_dir = "/opt/core/core"
+    app_root = "/opt/mctaxi"
+    app_port = var.app_port
+  })
   startup_script = templatefile("${path.module}/startup.sh.tftpl", {
     backend_repo_url          = var.backend_repo_url
     backend_repo_branch       = var.backend_repo_branch
     backend_repo_ssh_key      = var.backend_repo_ssh_private_key
     backend_repo_ssh_key_path = var.backend_repo_ssh_key_path
-    backend_repo_use_ssh_key  = length(trimspace(var.backend_repo_ssh_private_key)) > 0
+    backend_repo_use_ssh_key  = var.backend_repo_use_ssh_key
     app_port                  = var.app_port
+    duckdns_subdomain         = var.duckdns_subdomain
+    duckdns_token             = var.duckdns_token
+    letsencrypt_email         = var.letsencrypt_email
+    docker_compose            = local.docker_compose
   })
 }
 
