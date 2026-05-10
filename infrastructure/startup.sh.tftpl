@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export DEBIAN_FRONTEND=noninteractive
+
+BACKEND_REPO_URL="${backend_repo_url}"
+BACKEND_REPO_BRANCH="${backend_repo_branch}"
+BACKEND_REPO_USE_SSH_KEY="${backend_repo_use_ssh_key}"
+BACKEND_REPO_SSH_KEY_PATH="${backend_repo_ssh_key_path}"
+APP_PORT="${app_port}"
+APP_DIR="/opt/core"
+
+apt-get update -y
+apt-get install -y git docker.io nginx ca-certificates curl openssh-client
+
+systemctl enable --now docker
+
+mkdir -p /root/.ssh
+chmod 700 /root/.ssh
+
+ssh-keyscan github.com >> /root/.ssh/known_hosts
+chmod 600 /root/.ssh/known_hosts
+
+if [[ "$${BACKEND_REPO_USE_SSH_KEY}" == "true" ]]; then
+  cat >"$${BACKEND_REPO_SSH_KEY_PATH}" <<'KEY'
+${backend_repo_ssh_key}
+KEY
+  chmod 600 "$${BACKEND_REPO_SSH_KEY_PATH}"
+fi
+
+cat >/etc/nginx/sites-available/default <<'NGINX'
+server {
+  listen 80 default_server;
+  listen [::]:80 default_server;
+  server_name _;
+
+  location / {
+    proxy_pass http://127.0.0.1:${app_port};
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 3600;
+  }
+}
+NGINX
+
+rm -f /etc/nginx/sites-enabled/default
+ln -s /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
+
+if [[ -z "$${BACKEND_REPO_URL}" ]]; then
+  cat >/var/www/html/index.html <<'HTML'
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Backend not configured</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: sans-serif;
+        display: grid;
+        place-items: center;
+        background: #0f172a;
+        color: #e2e8f0;
+      }
+      .card {
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 20px;
+        max-width: 640px;
+        background: #111827;
+      }
+      code {
+        color: #86efac;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>GCP VM is ready</h1>
+      <p>The public VM is up, but <code>backend_repo_url</code> was not set.</p>
+      <p>Set the backend repo URL in Terraform, re-apply, and the VM will clone and run the core API on <code>:${app_port}</code>.</p>
+    </div>
+  </body>
+</html>
+HTML
+
+  systemctl enable nginx
+  systemctl restart nginx
+  exit 0
+fi
+
+rm -rf "$${APP_DIR}"
+if [[ "$${BACKEND_REPO_USE_SSH_KEY}" == "true" ]]; then
+  export GIT_SSH_COMMAND="ssh -i $${BACKEND_REPO_SSH_KEY_PATH} -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+fi
+git clone --depth 1 --branch "$${BACKEND_REPO_BRANCH}" "$${BACKEND_REPO_URL}" "$${APP_DIR}"
+
+cd "$${APP_DIR}/app"
+docker build -t mctaxi-core:latest .
+docker rm -f mctaxi-core >/dev/null 2>&1 || true
+docker run -d \
+  --name mctaxi-core \
+  --restart unless-stopped \
+  -p 127.0.0.1:${app_port}:8000 \
+  mctaxi-core:latest
+
+systemctl enable nginx
+systemctl restart nginx

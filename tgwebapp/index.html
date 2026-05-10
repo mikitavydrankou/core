@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Taxi Geo Sender</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg-1: #0b1220;
+        --bg-2: #14213d;
+        --card: rgba(14, 23, 42, 0.8);
+        --line: rgba(148, 163, 184, 0.22);
+        --text: #ecf3ff;
+        --muted: #9fb0cc;
+        --ok: #70e4b5;
+        --warn: #ffd166;
+        --error: #ff6b6b;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--text);
+        font-family: "Manrope", "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at 20% 0%, rgba(112, 228, 181, 0.22), transparent 35%),
+          radial-gradient(circle at 90% 10%, rgba(255, 209, 102, 0.18), transparent 25%),
+          linear-gradient(180deg, var(--bg-2), var(--bg-1));
+        padding: max(16px, env(safe-area-inset-top)) 14px max(16px, env(safe-area-inset-bottom));
+      }
+
+      .wrap {
+        max-width: 720px;
+        margin: 0 auto;
+        display: grid;
+        gap: 12px;
+      }
+
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: var(--card);
+        backdrop-filter: blur(10px);
+        padding: 14px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 24px;
+        letter-spacing: 0.2px;
+      }
+
+      p {
+        margin: 8px 0 0;
+        color: var(--muted);
+        line-height: 1.5;
+        font-size: 14px;
+      }
+
+      .status {
+        display: grid;
+        gap: 8px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        padding: 6px 10px;
+        width: fit-content;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--error);
+      }
+
+      .dot.ok {
+        background: var(--ok);
+      }
+
+      .row {
+        display: grid;
+        gap: 8px;
+      }
+
+      label {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      input {
+        width: 100%;
+        border: 1px solid var(--line);
+        background: rgba(5, 11, 23, 0.6);
+        color: var(--text);
+        border-radius: 12px;
+        padding: 11px 12px;
+        outline: none;
+      }
+
+      input:focus {
+        border-color: rgba(112, 228, 181, 0.7);
+      }
+
+      .buttons {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      button {
+        border: 0;
+        border-radius: 12px;
+        font: inherit;
+        font-weight: 700;
+        padding: 11px 12px;
+        color: #0a1a2f;
+        cursor: pointer;
+        background: linear-gradient(135deg, var(--ok), #98f5d1);
+      }
+
+      button.secondary {
+        color: var(--text);
+        border: 1px solid var(--line);
+        background: rgba(7, 14, 27, 0.55);
+      }
+
+      button.warn {
+        background: linear-gradient(135deg, var(--warn), #ffe39b);
+      }
+
+      button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
+      .log {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        min-height: 220px;
+        max-height: 300px;
+        overflow: auto;
+        background: rgba(4, 10, 20, 0.7);
+        padding: 10px;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-family: "JetBrains Mono", "Consolas", monospace;
+        font-size: 12px;
+      }
+
+      .kv {
+        margin-top: 6px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      @media (max-width: 520px) {
+        .buttons {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <section class="card">
+        <h1>Taxi Geo Sender</h1>
+        <p>
+          Mini App отправляет координаты в backend по WebSocket. На стороне диспетчера точки видны на
+          странице /dispatch.
+        </p>
+      </section>
+
+      <section class="card status">
+        <div class="pill"><span id="wsDot" class="dot"></span><span id="wsState">WS: disconnected</span></div>
+        <div class="pill"><span id="geoDot" class="dot"></span><span id="geoState">Geo: stopped</span></div>
+        <div class="kv" id="identity">ID: ...</div>
+        <div class="kv" id="lastPoint">Last point: no data</div>
+      </section>
+
+      <section class="card row">
+        <label for="wsUrl">Backend WebSocket URL</label>
+        <input id="wsUrl" placeholder="ws://34.107.50.184:8000/ws" />
+        <p>Укажи URL backend из репозитория <code>core</code>. Этот клиент живет отдельно и отправляет координаты туда.</p>
+      </section>
+
+      <section class="card">
+        <div class="buttons">
+          <button id="connectBtn">Connect WS</button>
+          <button id="disconnectBtn" class="secondary" disabled>Disconnect WS</button>
+          <button id="startBtn" class="warn" disabled>Start Geo</button>
+          <button id="stopBtn" class="secondary" disabled>Stop Geo</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="buttons">
+          <button id="sendOnceBtn" class="secondary" disabled>Send current point once</button>
+          <button id="clearBtn" class="secondary">Clear log</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="log" id="log"></div>
+      </section>
+    </div>
+
+    <script>
+      const tg = window.Telegram?.WebApp;
+      if (tg) {
+        tg.ready();
+        tg.expand();
+      }
+
+      const wsUrlInput = document.getElementById("wsUrl");
+      const connectBtn = document.getElementById("connectBtn");
+      const disconnectBtn = document.getElementById("disconnectBtn");
+      const startBtn = document.getElementById("startBtn");
+      const stopBtn = document.getElementById("stopBtn");
+      const sendOnceBtn = document.getElementById("sendOnceBtn");
+      const clearBtn = document.getElementById("clearBtn");
+      const logEl = document.getElementById("log");
+      const wsDot = document.getElementById("wsDot");
+      const geoDot = document.getElementById("geoDot");
+      const wsState = document.getElementById("wsState");
+      const geoState = document.getElementById("geoState");
+      const identityEl = document.getElementById("identity");
+      const lastPointEl = document.getElementById("lastPoint");
+
+      const persistedUrl = localStorage.getItem("taxi.ws.url");
+      const urlParams = new URLSearchParams(location.search);
+      const configuredUrl = urlParams.get("ws") || urlParams.get("backend") || persistedUrl || "";
+      wsUrlInput.value = configuredUrl;
+
+      const user = tg?.initDataUnsafe?.user;
+      const actorId = user?.id ? `tg-${user.id}` : `tg-${Math.floor(Date.now() / 1000)}`;
+      identityEl.textContent = user
+        ? `ID: ${actorId} | ${[user.first_name, user.last_name].filter(Boolean).join(" ")}`
+        : `ID: ${actorId} | external browser mode`;
+
+      let socket = null;
+      let watchId = null;
+      let seq = 0;
+      let lastPoint = null;
+
+      function appendLog(line, kind = "info") {
+        const time = new Date().toLocaleTimeString();
+        const p = kind === "error" ? "ERR" : kind === "sys" ? "SYS" : "INF";
+        logEl.textContent += `${time} [${p}] ${line}\n`;
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      function setWsConnected(on) {
+        wsDot.classList.toggle("ok", on);
+        wsState.textContent = on ? "WS: connected" : "WS: disconnected";
+        connectBtn.disabled = on;
+        disconnectBtn.disabled = !on;
+        startBtn.disabled = !on;
+        sendOnceBtn.disabled = !on;
+        if (!on) {
+          stopGeo();
+        }
+        if (on && !watchId) {
+          startGeo();
+        }
+      }
+
+      function setGeoActive(on) {
+        geoDot.classList.toggle("ok", on);
+        geoState.textContent = on ? "Geo: active" : "Geo: stopped";
+        startBtn.disabled = on || !socket || socket.readyState !== WebSocket.OPEN;
+        stopBtn.disabled = !on;
+      }
+
+      function sendPayload(lat, lng, accuracy) {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          appendLog("Skip send: websocket is not open", "error");
+          return;
+        }
+
+        seq += 1;
+        const payload = {
+          type: "driver_location",
+          driverId: actorId,
+          lat,
+          lng,
+          status: "online",
+          source: "tg_webapp",
+          accuracy,
+          seq,
+          ts: new Date().toISOString(),
+        };
+
+        socket.send(JSON.stringify(payload));
+        appendLog(`sent lat=${lat.toFixed(5)} lng=${lng.toFixed(5)} acc=${Math.round(accuracy)}m`);
+      }
+
+      function updateLastPoint(lat, lng, accuracy) {
+        lastPoint = { lat, lng, accuracy };
+        lastPointEl.textContent = `Last point: ${lat.toFixed(5)}, ${lng.toFixed(5)} | acc ${Math.round(accuracy)}m`;
+      }
+
+      function handleGeoSuccess(position, autoSend = true) {
+        const { latitude, longitude, accuracy } = position.coords;
+        updateLastPoint(latitude, longitude, accuracy);
+        if (autoSend) {
+          sendPayload(latitude, longitude, accuracy);
+        }
+      }
+
+      function handleGeoError(error) {
+        appendLog(`geolocation error: ${error.message}`, "error");
+        setGeoActive(false);
+      }
+
+      function connectWs() {
+        if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+          appendLog("websocket is already open or connecting", "sys");
+          return;
+        }
+
+        const url = wsUrlInput.value.trim();
+        if (!url) {
+          appendLog("set backend websocket url first", "error");
+          return;
+        }
+        localStorage.setItem("taxi.ws.url", url);
+        appendLog(`connecting to ${url}`, "sys");
+
+        socket = new WebSocket(url);
+
+        socket.addEventListener("open", () => {
+          setWsConnected(true);
+          appendLog("websocket connected", "sys");
+          if (tg?.HapticFeedback) {
+            tg.HapticFeedback.notificationOccurred("success");
+          }
+          startGeo();
+        });
+
+        socket.addEventListener("message", (event) => {
+          appendLog(`recv: ${event.data}`);
+        });
+
+        socket.addEventListener("close", (event) => {
+          appendLog(`websocket closed code=${event.code}`, "sys");
+          socket = null;
+          setWsConnected(false);
+        });
+
+        socket.addEventListener("error", () => {
+          appendLog("websocket error", "error");
+        });
+      }
+
+      function disconnectWs() {
+        if (!socket) {
+          return;
+        }
+        socket.close(1000, "manual disconnect");
+      }
+
+      function startGeo() {
+        if (!navigator.geolocation) {
+          appendLog("geolocation API is unavailable", "error");
+          return;
+        }
+        if (watchId !== null) {
+          return;
+        }
+
+        watchId = navigator.geolocation.watchPosition(
+          (position) => handleGeoSuccess(position, true),
+          handleGeoError,
+          {
+            enableHighAccuracy: true,
+            maximumAge: 5000,
+            timeout: 15000,
+          }
+        );
+        setGeoActive(true);
+        appendLog("geolocation watch started", "sys");
+      }
+
+      function stopGeo() {
+        if (watchId !== null) {
+          navigator.geolocation.clearWatch(watchId);
+          watchId = null;
+          appendLog("geolocation watch stopped", "sys");
+        }
+        setGeoActive(false);
+      }
+
+      function sendCurrentPointOnce() {
+        if (lastPoint) {
+          sendPayload(lastPoint.lat, lastPoint.lng, lastPoint.accuracy);
+          return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+          (position) => handleGeoSuccess(position, true),
+          handleGeoError,
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+        );
+      }
+
+      connectBtn.addEventListener("click", connectWs);
+      disconnectBtn.addEventListener("click", disconnectWs);
+      startBtn.addEventListener("click", startGeo);
+      stopBtn.addEventListener("click", stopGeo);
+      sendOnceBtn.addEventListener("click", sendCurrentPointOnce);
+      clearBtn.addEventListener("click", () => {
+        logEl.textContent = "";
+      });
+
+      window.addEventListener("beforeunload", () => {
+        stopGeo();
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.close(1000, "page unload");
+        }
+      });
+
+      appendLog("mini app loaded, connect websocket to start", "sys");
+    </script>
+  </body>
+</html>

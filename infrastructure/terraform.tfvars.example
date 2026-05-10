@@ -1,0 +1,27 @@
+project_id      = "your-gcp-project-id"
+region          = "europe-west1"
+zone            = "europe-west1-b"
+name_prefix     = "mctaxi-miniapp"
+machine_type    = "e2-small"
+boot_disk_size_gb = 20
+boot_disk_type    = "pd-standard"
+
+# For test environment keep open if needed, but better restrict to your IP/CIDR.
+allowed_ssh_cidrs = ["0.0.0.0/0"]
+allowed_app_cidrs = ["0.0.0.0/0"]
+
+# Example format: "nikita:ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA..."
+ssh_public_key = ""
+
+app_port = 8000
+
+# Public git URL for the core backend repository.
+backend_repo_url   = ""
+backend_repo_branch = "main"
+
+# For private GitHub repos, use an SSH deploy key and put the private key here.
+# The matching public key must be added to the core repo as a deploy key.
+backend_repo_ssh_private_key = <<EOF
+
+EOF
+backend_repo_ssh_key_path = "/root/.ssh/id_ed25519"
