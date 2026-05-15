@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Taxi Geo Sender</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
     <style>
       :root {
         color-scheme: dark;
@@ -161,6 +167,13 @@
         font-size: 12px;
       }
 
+      .map {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        overflow: hidden;
+        height: 320px;
+      }
+
       .kv {
         margin-top: 6px;
         font-size: 13px;
@@ -193,8 +206,8 @@
 
       <section class="card row">
         <label for="wsUrl">Backend WebSocket URL</label>
-        <input id="wsUrl" placeholder="ws://34.107.50.184:8000/ws" />
-        <p>Укажи URL backend из репозитория <code>core</code>. Этот клиент живет отдельно и отправляет координаты туда.</p>
+        <input id="wsUrl" placeholder="wss://mctaxi.duckdns.org/ws" />
+        <p>По умолчанию используется прод URL. Можно переопределить через поле или параметр <code>?ws=</code>.</p>
       </section>
 
       <section class="card">
@@ -216,8 +229,17 @@
       <section class="card">
         <div class="log" id="log"></div>
       </section>
+
+      <section class="card">
+        <div class="map" id="map"></div>
+      </section>
     </div>
 
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
     <script>
       const tg = window.Telegram?.WebApp;
       if (tg) {
@@ -240,9 +262,10 @@
       const identityEl = document.getElementById("identity");
       const lastPointEl = document.getElementById("lastPoint");
 
+      const DEFAULT_WS_URL = "wss://mctaxi.duckdns.org/ws";
       const persistedUrl = localStorage.getItem("taxi.ws.url");
       const urlParams = new URLSearchParams(location.search);
-      const configuredUrl = urlParams.get("ws") || urlParams.get("backend") || persistedUrl || "";
+      const configuredUrl = urlParams.get("ws") || urlParams.get("backend") || persistedUrl || DEFAULT_WS_URL;
       wsUrlInput.value = configuredUrl;
 
       const user = tg?.initDataUnsafe?.user;
@@ -255,6 +278,10 @@
       let watchId = null;
       let seq = 0;
       let lastPoint = null;
+      let map = null;
+      let marker = null;
+      let accuracyCircle = null;
+      let mapReady = false;
 
       function appendLog(line, kind = "info") {
         const time = new Date().toLocaleTimeString();
@@ -311,6 +338,45 @@
       function updateLastPoint(lat, lng, accuracy) {
         lastPoint = { lat, lng, accuracy };
         lastPointEl.textContent = `Last point: ${lat.toFixed(5)}, ${lng.toFixed(5)} | acc ${Math.round(accuracy)}m`;
+        updateMap(lat, lng, accuracy);
+      }
+
+      function ensureMap() {
+        if (mapReady) {
+          return;
+        }
+        map = L.map("map", { zoomControl: true }).setView([55.751244, 37.618423], 13);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: "&copy; OpenStreetMap contributors",
+          maxZoom: 19,
+        }).addTo(map);
+        mapReady = true;
+      }
+
+      function updateMap(lat, lng, accuracy) {
+        if (!window.L) {
+          return;
+        }
+        ensureMap();
+        const point = [lat, lng];
+        if (!marker) {
+          marker = L.marker(point).addTo(map);
+          map.setView(point, 16);
+        } else {
+          marker.setLatLng(point);
+        }
+        if (!accuracyCircle) {
+          accuracyCircle = L.circle(point, {
+            radius: accuracy,
+            color: "#70e4b5",
+            fillColor: "#70e4b5",
+            fillOpacity: 0.2,
+            weight: 1,
+          }).addTo(map);
+        } else {
+          accuracyCircle.setLatLng(point);
+          accuracyCircle.setRadius(accuracy);
+        }
       }
 
       function handleGeoSuccess(position, autoSend = true) {
@@ -326,17 +392,31 @@
         setGeoActive(false);
       }
 
+      function normalizeWsUrl(value) {
+        if (!value) {
+          return value;
+        }
+        if (value.startsWith("https://")) {
+          return value.replace("https://", "wss://");
+        }
+        if (value.startsWith("http://")) {
+          return value.replace("http://", "ws://");
+        }
+        return value;
+      }
+
       function connectWs() {
         if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
           appendLog("websocket is already open or connecting", "sys");
           return;
         }
 
-        const url = wsUrlInput.value.trim();
+        const url = normalizeWsUrl(wsUrlInput.value.trim());
         if (!url) {
           appendLog("set backend websocket url first", "error");
           return;
         }
+        wsUrlInput.value = url;
         localStorage.setItem("taxi.ws.url", url);
         appendLog(`connecting to ${url}`, "sys");
 
@@ -365,6 +445,8 @@
           appendLog("websocket error", "error");
         });
       }
+
+      connectWs();
 
       function disconnectWs() {
         if (!socket) {

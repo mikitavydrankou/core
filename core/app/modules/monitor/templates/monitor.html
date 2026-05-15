@@ -149,8 +149,8 @@
       </header>
       <main>
         <div class="toolbar">
-          <div class="status" id="status">Loading...</div>
-          <button id="refreshBtn">Refresh now</button>
+          <div class="status" id="status">Connecting to WebSocket...</div>
+          <button id="clearBtn">Clear</button>
         </div>
         <div class="log">
           <table>
@@ -172,7 +172,8 @@
     <script>
       const rows = document.getElementById("rows");
       const status = document.getElementById("status");
-      const refreshBtn = document.getElementById("refreshBtn");
+      const clearBtn = document.getElementById("clearBtn");
+      const maxRows = 200;
 
       function escapeHtml(value) {
         return String(value)
@@ -183,37 +184,69 @@
           .replaceAll("'", "&#39;");
       }
 
-      async function loadMessages() {
-        try {
-          const response = await fetch("/api/messages");
-          const data = await response.json();
+      function appendRow(time, source, data) {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td class="time">${escapeHtml(time)}</td>
+          <td><span class="source">${escapeHtml(source)}</span></td>
+          <td>${escapeHtml(data)}</td>
+        `;
+        rows.prepend(row);
 
-          status.textContent = `Loaded ${data.length} message(s). Auto-refresh every 1s.`;
-
-          if (!data.length) {
-            rows.innerHTML = '<tr><td class="empty" colspan="3">Waiting for messages...</td></tr>';
-            return;
-          }
-
-          rows.innerHTML = data
-            .slice()
-            .reverse()
-            .map((item) => `
-              <tr>
-                <td class="time">${escapeHtml(item.time)}</td>
-                <td><span class="source">${escapeHtml(item.source)}</span></td>
-                <td>${escapeHtml(item.data)}</td>
-              </tr>
-            `)
-            .join("");
-        } catch (error) {
-          status.textContent = `Failed to load messages: ${error.message}`;
+        while (rows.children.length > maxRows) {
+          rows.removeChild(rows.lastChild);
         }
       }
 
-      refreshBtn.addEventListener("click", loadMessages);
-      loadMessages();
-      setInterval(loadMessages, 1000);
+      function clearRows() {
+        rows.innerHTML = '<tr><td class="empty" colspan="3">Waiting for messages...</td></tr>';
+      }
+
+      clearBtn.addEventListener("click", clearRows);
+
+      const wsProtocol = location.protocol === "https:" ? "wss" : "ws";
+      const ws = new WebSocket(`${wsProtocol}://${location.host}/ws`);
+
+      ws.addEventListener("open", () => {
+        status.textContent = "Live stream connected";
+      });
+
+      ws.addEventListener("close", () => {
+        status.textContent = "Live stream disconnected";
+      });
+
+      ws.addEventListener("error", () => {
+        status.textContent = "WebSocket error";
+      });
+
+      ws.addEventListener("message", (event) => {
+        const receivedAt = new Date().toISOString();
+        let time = receivedAt;
+        let source = "ws";
+        let payload = event.data;
+
+        try {
+          const parsed = JSON.parse(event.data);
+          if (parsed.updatedAt) {
+            time = parsed.updatedAt;
+          }
+          if (parsed.type === "driver_location") {
+            source = "driver_location";
+          } else if (parsed.type) {
+            source = parsed.type;
+          }
+          payload = JSON.stringify(parsed);
+        } catch (error) {
+          source = "text";
+        }
+
+        if (rows.querySelector(".empty")) {
+          rows.innerHTML = "";
+        }
+        appendRow(time, source, payload);
+      });
+
+      clearRows();
     </script>
   </body>
 </html>

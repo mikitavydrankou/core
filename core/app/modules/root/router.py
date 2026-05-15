@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +20,6 @@ def read_root() -> dict[str, str]:
 
 
 @router.get("/api/health/db")
-async def db_health(db: AsyncSession = Depends(get_db)) -> dict[str, str]:
+async def db_health(db: Annotated[AsyncSession, Depends(get_db)]) -> dict[str, str]:
     result = await db.execute(text("SELECT 1"))
     return {"status": "ok", "db": str(result.scalar_one())}

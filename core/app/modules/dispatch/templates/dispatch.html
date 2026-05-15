@@ -125,8 +125,8 @@
     <div class="layout">
       <aside>
         <h1>Dispatcher</h1>
-        <p>Карта показывает последние координаты из backend (симулятор и Telegram mini app). Данные обновляются раз в секунду.</p>
-        <div class="status" id="status">Loading drivers...</div>
+        <p>Карта показывает водителей, которые сейчас отправляют координаты в WebSocket.</p>
+        <div class="status" id="status">Connecting to live updates...</div>
         <div class="driver-list" id="driverList"></div>
       </aside>
       <main id="map"></main>
@@ -138,6 +138,9 @@
       const driverList = document.getElementById("driverList");
       const map = L.map("map").setView([53.9, 27.56], 11);
       const markers = new Map();
+      const drivers = new Map();
+      const lastSeen = new Map();
+      const staleAfterMs = 12000;
 
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -162,19 +165,16 @@
         });
       }
 
-      function isStale(updatedAt) {
-        return Date.now() - Date.parse(updatedAt) > 12000;
-      }
-
-      function renderDrivers(drivers, totalCount) {
-        if (!drivers.length) {
+      function renderDrivers() {
+        const entries = Array.from(drivers.values());
+        if (!entries.length) {
           driverList.innerHTML = '<div class="empty">Сейчас нет онлайн водителей. Запусти симулятор или Telegram mini app.</div>';
-          statusEl.textContent = totalCount ? `Online: 0 of ${totalCount}` : "No online drivers";
+          statusEl.textContent = "No online drivers";
           return;
         }
 
-        statusEl.textContent = totalCount ? `Online: ${drivers.length} of ${totalCount}` : `Online: ${drivers.length}`;
-        driverList.innerHTML = drivers
+        statusEl.textContent = `Online: ${entries.length}`;
+        driverList.innerHTML = entries
           .map((driver) => {
             return `
               <div class="driver-card">
@@ -187,48 +187,76 @@
           .join("");
       }
 
-      async function refreshDrivers() {
-        try {
-          const response = await fetch("/api/drivers");
-          const drivers = await response.json();
-          const onlineDrivers = drivers.filter(
-            (driver) => !isStale(driver.updatedAt)
+      function updateDriver(driver) {
+        drivers.set(driver.driverId, driver);
+        lastSeen.set(driver.driverId, Date.parse(driver.updatedAt) || Date.now());
+
+        const color = toStyle(driver.status, false);
+        const latLng = [driver.lat, driver.lng];
+
+        if (!markers.has(driver.driverId)) {
+          markers.set(
+            driver.driverId,
+            L.marker(latLng, { icon: markerIcon(color) })
+              .addTo(map)
+              .bindPopup(`Driver ${driver.driverId}`)
           );
-          const onlineIds = new Set(onlineDrivers.map((driver) => driver.driverId));
-
-          renderDrivers(onlineDrivers, drivers.length);
-
-          for (const [driverId, marker] of markers.entries()) {
-            if (!onlineIds.has(driverId)) {
-              map.removeLayer(marker);
-              markers.delete(driverId);
-            }
-          }
-
-          for (const driver of onlineDrivers) {
-            const color = toStyle(driver.status, false);
-            const latLng = [driver.lat, driver.lng];
-
-            if (!markers.has(driver.driverId)) {
-              markers.set(
-                driver.driverId,
-                L.marker(latLng, { icon: markerIcon(color) })
-                  .addTo(map)
-                  .bindPopup(`Driver ${driver.driverId}`)
-              );
-            } else {
-              const marker = markers.get(driver.driverId);
-              marker.setLatLng(latLng);
-              marker.setIcon(markerIcon(color));
-            }
-          }
-        } catch (error) {
-          statusEl.textContent = `Failed to load drivers: ${error.message}`;
+        } else {
+          const marker = markers.get(driver.driverId);
+          marker.setLatLng(latLng);
+          marker.setIcon(markerIcon(color));
         }
+
+        renderDrivers();
       }
 
-      refreshDrivers();
-      setInterval(refreshDrivers, 1000);
+      function pruneDrivers() {
+        const now = Date.now();
+        for (const [driverId, seenAt] of lastSeen.entries()) {
+          if (now - seenAt <= staleAfterMs) {
+            continue;
+          }
+
+          lastSeen.delete(driverId);
+          drivers.delete(driverId);
+          const marker = markers.get(driverId);
+          if (marker) {
+            map.removeLayer(marker);
+            markers.delete(driverId);
+          }
+        }
+        renderDrivers();
+      }
+
+      const wsProtocol = location.protocol === "https:" ? "wss" : "ws";
+      const ws = new WebSocket(`${wsProtocol}://${location.host}/ws`);
+
+      ws.addEventListener("open", () => {
+        statusEl.textContent = "Live updates connected";
+      });
+
+      ws.addEventListener("close", () => {
+        statusEl.textContent = "Live updates disconnected";
+      });
+
+      ws.addEventListener("error", () => {
+        statusEl.textContent = "WebSocket error";
+      });
+
+      ws.addEventListener("message", (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type !== "driver_location") {
+            return;
+          }
+          updateDriver(data);
+        } catch (error) {
+          return;
+        }
+      });
+
+      renderDrivers();
+      setInterval(pruneDrivers, 1000);
     </script>
   </body>
 </html>

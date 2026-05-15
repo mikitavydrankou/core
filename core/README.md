@@ -7,13 +7,6 @@
 3. Установить зависимости и локальные git-хуки.
 4. Поднять инфраструктуру (Postgres и Redis).
 5. Запустить backend локально.
-6. Прогнать quality gate.
-
-```bash
-git clone <repo-url>
-cd core
-
-python3 -m venv .venv
 . .venv/bin/activate
 
 make install-dev
@@ -54,8 +47,6 @@ make dev-stop     # остановить infra
 - `GET /sim` - симулятор водителей.
 - `GET /dispatch` - диспетчерская карта.
 - `GET /monitor` - мониторинг входящих WebSocket-сообщений.
-- `GET /api/drivers` - список актуальных координат водителей (пока in-memory).
-- `GET /api/messages` - лента входящих сообщений (пока in-memory).
 - `GET /api/health/db` - проверка подключения к Postgres (выполняет `SELECT 1`).
 
 ### WebSocket
@@ -63,7 +54,6 @@ make dev-stop     # остановить infra
 Endpoint: `ws://127.0.0.1:8000/ws`
 
 Поддерживаемый payload для координат водителя:
-
 ```json
 {
 	"type": "driver_location",
@@ -100,18 +90,15 @@ Endpoint: `ws://127.0.0.1:8000/ws`
 ### Поток данных
 
 1. Симулятор или mini app отправляет `driver_location` по WebSocket `/ws`.
-2. Сервер сохраняет состояние водителя и лог сообщения (пока в памяти процесса).
-3. `/dispatch` запрашивает `/api/drivers` и рисует актуальные координаты.
-4. `/monitor` запрашивает `/api/messages` и показывает входящие события.
+2. Сервер сразу ретранслирует события `driver_location` всем подключенным клиентам.
+3. `/dispatch` показывает водителей, которые сейчас присылают координаты.
+4. `/monitor` отображает live-поток событий из WebSocket.
 
 ### База данных и миграции
 
 - `DATABASE_URL` задает строку подключения к Postgres.
 - Async SQLAlchemy конфиг в `app/core/database.py`.
 - Alembic живет в `core/alembic`, миграции в `core/alembic/versions`.
-- Первая модель `DriverState` и миграция уже созданы, но runtime пока использует in-memory storage.
-
-Быстрые команды:
 
 ```bash
 make db-revision msg="add_table"
@@ -154,7 +141,6 @@ make install-dev
 
 - GET `/`, `/sim`, `/dispatch`, `/monitor`
 - WebSocket `/ws` (driver ack + echo)
-- API `/api/drivers` после WebSocket события
 
 Дополнительно в quality gate включен линтинг через Ruff.
 
