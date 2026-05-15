@@ -166,23 +166,21 @@
         return Date.now() - Date.parse(updatedAt) > 12000;
       }
 
-      function renderDrivers(drivers) {
+      function renderDrivers(drivers, totalCount) {
         if (!drivers.length) {
-          driverList.innerHTML = '<div class="empty">Пока нет координат. Запусти симулятор или Telegram mini app.</div>';
-          statusEl.textContent = "No live locations";
+          driverList.innerHTML = '<div class="empty">Сейчас нет онлайн водителей. Запусти симулятор или Telegram mini app.</div>';
+          statusEl.textContent = totalCount ? `Online: 0 of ${totalCount}` : "No online drivers";
           return;
         }
 
-        statusEl.textContent = `Drivers: ${drivers.length}`;
+        statusEl.textContent = totalCount ? `Online: ${drivers.length} of ${totalCount}` : `Online: ${drivers.length}`;
         driverList.innerHTML = drivers
           .map((driver) => {
-            const stale = isStale(driver.updatedAt);
-            const label = stale ? "stale" : driver.status;
             return `
               <div class="driver-card">
                 <div class="driver-name">Driver ${driver.driverId}</div>
                 <div class="driver-meta">Lat: ${Number(driver.lat).toFixed(5)}<br/>Lng: ${Number(driver.lng).toFixed(5)}<br/>Updated: ${driver.updatedAt}</div>
-                <div class="badge">${label}</div>
+                <div class="badge">online</div>
               </div>
             `;
           })
@@ -193,11 +191,22 @@
         try {
           const response = await fetch("/api/drivers");
           const drivers = await response.json();
-          renderDrivers(drivers);
+          const onlineDrivers = drivers.filter(
+            (driver) => !isStale(driver.updatedAt)
+          );
+          const onlineIds = new Set(onlineDrivers.map((driver) => driver.driverId));
 
-          for (const driver of drivers) {
-            const stale = isStale(driver.updatedAt);
-            const color = toStyle(driver.status, stale);
+          renderDrivers(onlineDrivers, drivers.length);
+
+          for (const [driverId, marker] of markers.entries()) {
+            if (!onlineIds.has(driverId)) {
+              map.removeLayer(marker);
+              markers.delete(driverId);
+            }
+          }
+
+          for (const driver of onlineDrivers) {
+            const color = toStyle(driver.status, false);
             const latLng = [driver.lat, driver.lng];
 
             if (!markers.has(driver.driverId)) {

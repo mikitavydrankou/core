@@ -1,4 +1,3 @@
 pytest
 httpx
 ruff
-pre-commit

@@ -8,6 +8,7 @@
 app/
   main.py
   core/
+    database.py
   modules/
     root/
       router.py
@@ -40,6 +41,9 @@ app/
 - service.py содержит прикладную логику и оркестрацию.
 - shared содержит переиспользуемые компоненты без привязки к конкретному модулю.
 - core предназначен для инфраструктурных настроек (config, logging, exceptions) по мере роста.
+
+Для базы данных используем Async SQLAlchemy, базовые настройки лежат в core/database.py.
+Миграции управляются Alembic в каталоге core/alembic.
 
 ## 4. Правила импортов
 

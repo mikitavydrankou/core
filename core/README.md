@@ -46,6 +46,81 @@ make dev-stop     # остановить infra
 
 Структура приложения и правила развития описаны в [app/README.md](app/README.md).
 
+## Взаимодействие и протоколы
+
+### HTTP
+
+- `GET /` - корневая страница с ссылками на основные страницы.
+- `GET /sim` - симулятор водителей.
+- `GET /dispatch` - диспетчерская карта.
+- `GET /monitor` - мониторинг входящих WebSocket-сообщений.
+- `GET /api/drivers` - список актуальных координат водителей (пока in-memory).
+- `GET /api/messages` - лента входящих сообщений (пока in-memory).
+- `GET /api/health/db` - проверка подключения к Postgres (выполняет `SELECT 1`).
+
+### WebSocket
+
+Endpoint: `ws://127.0.0.1:8000/ws`
+
+Поддерживаемый payload для координат водителя:
+
+```json
+{
+	"type": "driver_location",
+	"driverId": "driver-1",
+	"lat": 55.751,
+	"lng": 37.618,
+	"status": "online"
+}
+```
+
+Ответ на координаты:
+
+```json
+{
+	"type": "driver_ack",
+	"driverId": "driver-1",
+	"lat": 55.751,
+	"lng": 37.618,
+	"status": "online"
+}
+```
+
+Любой другой JSON получает ответ:
+
+```json
+{
+	"type": "ack",
+	"payload": {"any": "data"}
+}
+```
+
+Если пришел не-JSON, сервер отвечает текстом `Echo: <message>`.
+
+### Поток данных
+
+1. Симулятор или mini app отправляет `driver_location` по WebSocket `/ws`.
+2. Сервер сохраняет состояние водителя и лог сообщения (пока в памяти процесса).
+3. `/dispatch` запрашивает `/api/drivers` и рисует актуальные координаты.
+4. `/monitor` запрашивает `/api/messages` и показывает входящие события.
+
+### База данных и миграции
+
+- `DATABASE_URL` задает строку подключения к Postgres.
+- Async SQLAlchemy конфиг в `app/core/database.py`.
+- Alembic живет в `core/alembic`, миграции в `core/alembic/versions`.
+- Первая модель `DriverState` и миграция уже созданы, но runtime пока использует in-memory storage.
+
+Быстрые команды:
+
+```bash
+make db-revision msg="add_table"
+make db-upgrade
+make db-downgrade
+make db-current
+make db-history
+```
+
 ## WebSocket monitor
 
 После запуска backend откройте [http://127.0.0.1:8000/monitor](http://127.0.0.1:8000/monitor), чтобы видеть все сообщения, приходящие по WebSocket на `/ws`.
@@ -91,14 +166,11 @@ make install-dev
 make precommit-install
 ```
 
-После установки хуков действует и `pre-push` проверка:
-
-- перед `git push` автоматически запускается `make check`
-- если линт или тесты падают, push блокируется
+Pre-push проверок нет, `make check` запускайте вручную при необходимости.
 
 ### CI
 
-GitHub Actions временно отключен для этого репозитория. Все проверки выполняются локально через pre-push и `make check`.
+GitHub Actions временно отключен для этого репозитория. Все проверки выполняются локально через `make check`.
 
 Если нужно поднять только инфраструктуру вручную:
 
