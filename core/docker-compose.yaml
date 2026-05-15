@@ -16,5 +16,14 @@ services:
     image: redis:7
     container_name: taxi_redis
 
+  adminer:
+    image: adminer:4
+    container_name: taxi_adminer
+    restart: always
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+
 volumes:
   postgres_data:
