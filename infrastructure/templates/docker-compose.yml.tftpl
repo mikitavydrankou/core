@@ -26,7 +26,7 @@ services:
   tgweb-static:
     image: nginx:stable-alpine
     volumes:
-      - ${app_root}/tgwebapp:/usr/share/nginx/html:ro
+      - ${app_dir}/miniapp:/usr/share/nginx/html:ro
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.tgweb.rule=Host(`${duckdns_subdomain}.duckdns.org`) && PathPrefix(`/app`)"

@@ -1,8 +1,8 @@
 Зайти на сервак:
-ssh -i ~/.ssh/mctaxi_vm_key nikita@34.107.50.184
+ssh -i ~/.ssh/mctaxi_vm_key nikita@34.89.144.253
 
 Подчистить старые known_hosts
-ssh-keygen -f ~/.ssh/known_hosts -R 34.107.50.184
+ssh-keygen -f ~/.ssh/known_hosts -R 34.89.144.253
 
 логи почекать
 journalctl -u google-startup-scripts.service --no-pager | tail -n 100

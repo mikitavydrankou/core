@@ -33,12 +33,13 @@ fi
 
 APP_DIR="$APP_HOME/core"
 APP_ROOT="$APP_HOME/mctaxi"
+APP_WEB_DIR="$APP_DIR/miniapp"
 
 exec > >(tee /var/log/startup-script.log) 2>&1
 set -x
 
 apt-get update -y
-apt-get install -y git docker.io curl ca-certificates rsync
+apt-get install -y git docker.io curl ca-certificates
 
 # Install Docker Compose v2 as CLI plugin (fallback when package not available)
 mkdir -p /usr/local/lib/docker/cli-plugins
@@ -107,26 +108,9 @@ Backend not configured. Set backend_repo_url in Terraform.
 EOF
 fi
 
-# Copy static webapp from cloned repo if present
-if [ -d "$APP_DIR/tgwebapp" ]; then
-  mkdir -p "$APP_ROOT/tgwebapp"
-  rsync -a "$APP_DIR/tgwebapp/" "$APP_ROOT/tgwebapp/" || true
-else
-  mkdir -p "$APP_ROOT/tgwebapp"
-  cat >"$APP_ROOT/tgwebapp/index.html" <<'HTML'
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>tgwebapp not found</title>
-  </head>
-  <body>
-    <h1>tgwebapp not found</h1>
-    <p>Clone a repo that contains tgwebapp or deploy a static frontend.</p>
-  </body>
-</html>
-HTML
+# Mini App is served directly from the repo (no copying)
+if [ ! -d "$APP_WEB_DIR" ]; then
+  echo "miniapp directory not found at $APP_WEB_DIR" >&2
 fi
 
 # Write rendered docker-compose (provided by Terraform template)
