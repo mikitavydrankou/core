@@ -9,6 +9,8 @@
 - firewall для `22`, `80`, `443` и порта приложения (по умолчанию `8000`)
 - bootstrap-скрипт, который ставит `nginx`, `git` и `docker`
 
+Шаблоны Terraform (`*.tftpl`) лежат в `templates/`.
+
 Профиль по умолчанию оставлен умеренным: он уже удобен для теста Mini App, но не должен быстро сжигать free trial на дорогих CPU/RAM и SSD.
 
 ## Быстрый старт
@@ -23,6 +25,7 @@ cp terraform.tfvars.example terraform.tfvars
 - `project_id`
 - при необходимости `region`, `zone`, `machine_type`
 - желательно ограничить `allowed_ssh_cidrs` вашим IP
+- указать `app_user` (все файлы будут в домашней директории этого пользователя)
 - если нужно ещё экономнее, можно снизить `machine_type` обратно до `e2-micro`
 - указать `backend_repo_url` для репозитория `core`, чтобы VM могла сама клонировать и запускать backend
 - если `core` приватный, использовать SSH URL вида `git@github.com:<org>/<repo>.git` и заполнить `backend_repo_ssh_private_key`
@@ -41,6 +44,8 @@ terraform apply
 - `ws_url_example`
 
 5. Если `backend_repo_url` заполнен, VM сама клонирует `core`, собирает Docker image и поднимает API за nginx на публичном IP.
+
+По умолчанию все файлы кладутся в `~/mctaxi` и `~/core` указанного `app_user`.
 
 ## Private GitHub repo
 

@@ -4,24 +4,32 @@ resource "random_id" "suffix" {
 
 locals {
   base_name = "${var.name_prefix}-${random_id.suffix.hex}"
-  docker_compose = templatefile("${path.module}/docker-compose.yml.tftpl", {
+  app_home = var.app_user == "root" ? "/root" : "/home/${var.app_user}"
+  app_root = "${local.app_home}/mctaxi"
+  app_dir = "${local.app_home}/core"
+  docker_compose = templatefile("${path.module}/templates/docker-compose.yml.tftpl", {
     duckdns_subdomain = var.duckdns_subdomain
     letsencrypt_email = var.letsencrypt_email
-    app_dir = "/opt/core/core"
-    app_root = "/opt/mctaxi"
+    app_dir = "${local.app_dir}/core"
+    app_root = local.app_root
     app_port = var.app_port
   })
-  startup_script = templatefile("${path.module}/startup.sh.tftpl", {
+  traefik_config = templatefile("${path.module}/templates/traefik.yml.tftpl", {
+    letsencrypt_email = var.letsencrypt_email
+  })
+  startup_script = templatefile("${path.module}/templates/startup.sh.tftpl", {
     backend_repo_url          = var.backend_repo_url
     backend_repo_branch       = var.backend_repo_branch
     backend_repo_ssh_key      = var.backend_repo_ssh_private_key
     backend_repo_ssh_key_path = var.backend_repo_ssh_key_path
     backend_repo_use_ssh_key  = var.backend_repo_use_ssh_key
     app_port                  = var.app_port
+    app_user                  = var.app_user
     duckdns_subdomain         = var.duckdns_subdomain
     duckdns_token             = var.duckdns_token
     letsencrypt_email         = var.letsencrypt_email
     docker_compose            = local.docker_compose
+    traefik_config            = local.traefik_config
   })
 }
 

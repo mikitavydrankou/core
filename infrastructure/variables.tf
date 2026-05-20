@@ -45,6 +45,12 @@ variable "ssh_public_key" {
   default     = ""
 }
 
+variable "app_user" {
+  description = "Linux user that owns and runs the app in their home directory"
+  type        = string
+  default     = "debian"
+}
+
 variable "allowed_ssh_cidrs" {
   description = "CIDRs allowed for SSH access"
   type        = list(string)
