@@ -7,3 +7,6 @@ ssh-keygen -f ~/.ssh/known_hosts -R 34.89.144.253
 логи почекать
 journalctl -u google-startup-scripts.service --no-pager | tail -n 100
 tail -n 200 /var/log/startup-script.log
+
+пометить порченную тачку
+terraform taint google_compute_instance.miniapp_server

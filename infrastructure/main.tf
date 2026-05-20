@@ -10,7 +10,7 @@ locals {
   docker_compose = templatefile("${path.module}/templates/docker-compose.yml.tftpl", {
     duckdns_subdomain = var.duckdns_subdomain
     letsencrypt_email = var.letsencrypt_email
-    app_dir = "${local.app_dir}/core"
+    app_dir = local.app_dir
     app_root = local.app_root
     app_port = var.app_port
   })
